@@ -1,7 +1,0 @@
-{
-  "name": "True Tilawah",
-  "description": "A comprehensive Quran memorization, recitation, and progress tracking application.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
