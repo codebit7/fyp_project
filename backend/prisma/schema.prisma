@@ -1,6 +1,7 @@
 // This is your Prisma schema file for True Tilawah
 // Database: MySQL via PlanetScale or standard MySQL
 
+
 generator client {
   provider = "prisma-client-js"
 }

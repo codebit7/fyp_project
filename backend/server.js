@@ -1,61 +1,60 @@
-// Load environment variables FIRST — before any other import reads process.env
-require("dotenv").config();
+/**
+ * server.js  →  replace backend/server.js with this file
+ *
+ * Changes from original:
+ *  - Adds express-ws so the app supports WebSocket routes
+ *  - Registers /ws/audio for real-time audio analysis
+ *
+ * Install once:
+ *   npm install express-ws
+ */
 
-const app = require("./src/app");
-const { connectDatabase, disconnectDatabase } = require("./src/config/database");
+require('dotenv').config();
 
-const PORT = parseInt(process.env.PORT) || 5000;
+const app       = require('./src/app');
+const cors      = require('cors');
+const expressWs = require('express-ws');
 
-// ─────────────────────────────────────────────
-// Boot sequence
-// ─────────────────────────────────────────────
-const start = async () => {
-  // 1. Verify DB is reachable before accepting traffic
+const { connectDatabase, disconnectDatabase } = require('./src/config/database');
+const { registerAudioWebSocket }              = require('./src/routes/audio.ws');
+
+const PORT = parseInt(process.env.PORT, 10) || 5000;
+
+async function start() {
+  // Enable CORS for all origins
+  app.use(cors());
   await connectDatabase();
 
-  // 2. Start HTTP server
+  // Upgrade the Express app to support WebSocket routes (mutates app in-place)
+  expressWs(app);
+
+  // Register /ws/audio endpoint
+  registerAudioWebSocket(app);
+
   const server = app.listen(PORT, () => {
-    console.log(`🚀  True Tilawah API running on port ${PORT}`);
-    console.log(`📡  Environment : ${process.env.NODE_ENV || "development"}`);
-    console.log(`🔗  Base URL    : http://localhost:${PORT}/api`);
-    console.log(`❤️   Health     : http://localhost:${PORT}/api/health`);
+    console.log(`\n🚀  True Tilawah API is running`);
+    console.log(`   REST  →  http://localhost:${PORT}/api`);
+    console.log(`   WS    →  ws://localhost:${PORT}/ws/audio`);
+    console.log(`   Health → http://localhost:${PORT}/api/health\n`);
   });
 
-  // ─────────────────────────────────────────────
-  // Graceful shutdown handlers
-  // ─────────────────────────────────────────────
-  const shutdown = async (signal) => {
-    console.log(`\n⚠️   Received ${signal}. Shutting down gracefully...`);
+  // ── Graceful shutdown ────────────────────────────────────────────────────────
 
+  const shutdown = async (signal) => {
+    console.log(`\n⚠️  ${signal} received – shutting down…`);
     server.close(async () => {
       await disconnectDatabase();
-      console.log("✅  Server closed.");
+      console.log('✅  Clean shutdown complete');
       process.exit(0);
     });
-
-    // Force-quit after 10 s if graceful shutdown hangs
-    setTimeout(() => {
-      console.error("❌  Forced shutdown after timeout.");
-      process.exit(1);
-    }, 10_000);
+    // Force-exit if graceful shutdown takes too long
+    setTimeout(() => { console.error('❌  Forced exit'); process.exit(1); }, 10_000);
   };
 
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT",  () => shutdown("SIGINT"));
-
-  // ─────────────────────────────────────────────
-  // Catch unhandled promise rejections & exceptions
-  // ─────────────────────────────────────────────
-  process.on("unhandledRejection", (reason) => {
-    console.error("Unhandled Promise Rejection:", reason);
-    // Do not crash in production; log and continue
-  });
-
-  process.on("uncaughtException", (error) => {
-    console.error("Uncaught Exception:", error);
-    // Crash the process — state is unknown
-    process.exit(1);
-  });
-};
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
+  process.on('unhandledRejection', (r) => console.error('Unhandled rejection:', r));
+  process.on('uncaughtException',  (e) => { console.error('Uncaught exception:', e); process.exit(1); });
+}
 
 start();
